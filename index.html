@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CropsNH Breeding Path Finder</title>
+<style>
+  :root {
+    --bg: #10160f;
+    --panel: #1a2418;
+    --panel2: #212f1e;
+    --line: #35492f;
+    --text: #dbe8d4;
+    --muted: #8fa587;
+    --green: #79c356;
+    --green-dark: #4c7d36;
+    --amber: #e0b34c;
+    --red: #e07a6a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px 60px;
+    background: var(--bg); color: var(--text);
+    font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  main { max-width: 880px; margin: 0 auto; }
+  h1 { margin: 0 0 2px; font-size: 24px; color: var(--green); letter-spacing: .3px; }
+  .sub { color: var(--muted); margin: 0 0 22px; font-size: 13.5px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px; margin-bottom: 18px;
+  }
+  form .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .6px; }
+  input[type="text"] {
+    width: 260px; max-width: 100%; padding: 9px 11px; border-radius: 7px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 15px;
+  }
+  input[type="text"]:focus { outline: none; border-color: var(--green-dark); }
+  .swap {
+    background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 7px;
+    padding: 9px 10px; cursor: pointer; font-size: 14px;
+  }
+  .swap:hover { color: var(--green); border-color: var(--green-dark); }
+  .options { margin-top: 14px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .options label { display: inline; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text); margin: 0; }
+  button.go {
+    background: var(--green-dark); color: #eaf5e2; border: 0; border-radius: 7px;
+    padding: 10px 22px; font-size: 15px; cursor: pointer;
+  }
+  button.go:hover { background: var(--green); color: #10240a; }
+  button.go:disabled { opacity: .5; cursor: wait; }
+  .hint { color: var(--muted); font-size: 13px; }
+  .status { margin: 4px 0 14px; }
+  .status.error { color: var(--red); }
+  details.path {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    margin-bottom: 10px; overflow: hidden;
+  }
+  details.path > summary {
+    cursor: pointer; padding: 12px 16px; list-style: none; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap;
+  }
+  details.path > summary::-webkit-details-marker { display: none; }
+  details.path > summary::before { content: "▸"; color: var(--green); transition: transform .15s; }
+  details.path[open] > summary::before { transform: rotate(90deg); }
+  details.path[open] > summary { border-bottom: 1px dashed var(--line); }
+  .pathno { color: var(--green); font-weight: 600; white-space: nowrap; }
+  .chain { font-size: 14px; word-break: break-word; }
+  .chain .arrow { color: var(--muted); padding: 0 3px; }
+  .chain .crop { font-weight: 600; }
+  .meta-right { margin-left: auto; color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  ol.steps { margin: 0; padding: 14px 20px 14px 42px; }
+  ol.steps li { margin-bottom: 12px; }
+  ol.steps li:last-child { margin-bottom: 2px; }
+  .cross b { color: var(--green); font-weight: 600; }
+  .cross .out b { color: #a9de8b; }
+  .badges { margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .badge {
+    font-size: 11.5px; padding: 1px 8px; border-radius: 20px; border: 1px solid var(--line);
+    color: var(--muted); background: var(--bg);
+  }
+  .badge.machine { color: var(--amber); border-color: #6b5722; }
+  .badge.pool { color: #7fb2d6; border-color: #2d4b5e; }
+  .badge.mod { color: #c9a2e8; border-color: #4e3a63; }
+  .badge.plantable { color: #8fe36a; border-color: #3c6b2a; background: #16240f; }
+  .badge.bred { color: var(--muted); }
+  .mat { white-space: nowrap; }
+  .need { margin-top: 3px; color: var(--muted); font-size: 13px; }
+  .need b { color: var(--text); font-weight: 600; }
+  .legend { margin-top: 12px; color: var(--muted); font-size: 12.5px; }
+  footer { max-width: 880px; margin: 26px auto 0; color: var(--muted); font-size: 12px; }
+  footer code { background: var(--panel); padding: 1px 5px; border-radius: 4px; }
+  #boot.booting .panel.results { display: none; }
+</style>
+</head>
+<body class="booting">
+<main>
+  <h1>CropsNH Breeding Path Finder</h1>
+  <p class="sub">Static single-page app over <code>cropsnh_breeding.db</code> — queried with SQLite compiled to WebAssembly. No backend, no network.</p>
+
+  <div class="panel">
+    <form id="searchForm">
+      <div class="row">
+        <div>
+          <label for="fromInput">Start crop</label>
+          <input type="text" id="fromInput" list="cropList" placeholder="e.g. Wheat" autocomplete="off" />
+        </div>
+        <button type="button" class="swap" id="swapBtn" title="Swap start and target">⇄</button>
+        <div>
+          <label for="toInput">Target crop</label>
+          <input type="text" id="toInput" list="cropList" placeholder="e.g. Rubyne" autocomplete="off" />
+        </div>
+        <button type="submit" class="go" id="goBtn">Find paths</button>
+      </div>
+      <datalist id="cropList"></datalist>
+      <div class="options">
+        <label><input type="checkbox" id="poolsChk" checked /> include probabilistic in-world pool spreading</label>
+        <span class="hint">Paths chain one crop into the next; extra parents per step must be sourced separately.</span>
+      </div>
+      <div class="legend">
+        <span class="badge plantable">🌱 item</span> marks crops plantable directly from that item with no breeding;
+        tied-shortest paths are prioritized so fewer ingredients still need breeding.
+      </div>
+    </form>
+  </div>
+
+  <div class="status" id="status"></div>
+  <div id="results" class="results"></div>
+</main>
+<footer id="footer">loading database…</footer>
+
+<script src="data.js"></script>
+<script src="vendor/sql-wasm.js"></script>
+<script src="breeding-engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
