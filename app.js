@@ -14,6 +14,11 @@
     results: $("results"),
     footer: $("footer"),
     swap: $("swapBtn"),
+    typeModal: $("cropTypeModal"),
+    typeTitle: $("cropTypeTitle"),
+    typeSub: $("cropTypeSub"),
+    typeList: $("cropTypeList"),
+    typeClose: $("cropTypeClose"),
   };
 
   let graph = null;
@@ -122,6 +127,7 @@
   }
 
   function render(start, target, res) {
+    closeTypeModal(); // any open type list belongs to the previous results
     els.results.innerHTML = "";
     if (res.status === "same") {
       setStatus(`${start} is already ${target}. 🌱`);
@@ -164,7 +170,7 @@
   }
 
   function stepHtml(step) {
-    const ing = step.ingredients.map((x) => `<b>${esc(x.label)}</b>`).join(" × ");
+    const ing = step.ingredients.map((x) => `<b>${labelHtml(x, step.from)}</b>`).join(" × ");
     const badges = [];
     if (step.kind === "pool") badges.push(`<span class="badge pool">in-world spreading · probabilistic</span>`);
     if (step.machineOnly) badges.push(`<span class="badge machine">crop breeder machine only</span>`);
@@ -174,7 +180,7 @@
     if (step.toPlantable && step.toPlantable.length)
       badges.push(`<span class="badge plantable" title="this crop skips breeding entirely">🌱 output plantable: ${esc(viaText(step.toPlantable))}</span>`);
 
-    const mats = step.ingredients.map(matHtml).join(", ");
+    const mats = step.ingredients.map((x) => matHtml(x, step.from)).join(", ");
     const needs = step.ingredients.length ? `<div class="need">also source ${mats}</div>` : "";
 
     return (
@@ -190,7 +196,7 @@
     return via.map((v) => v.desc + (v.gate ? ` (if ${v.gate})` : "")).join(" / ");
   }
 
-  function matHtml(x) {
+  function matHtml(x, from) {
     let chip;
     if (x.plantable) {
       const prefix = x.partnerExample ? `partner e.g. ${esc(x.partnerExample)}: ` : "";
@@ -198,7 +204,65 @@
     } else {
       chip = `<span class="badge bred">needs breeding</span>`;
     }
-    return `<span class="mat"><b>${esc(x.label)}</b> ${chip}</span>`;
+    return `<span class="mat"><b>${labelHtml(x, from)}</b> ${chip}</span>`;
+  }
+
+  /**
+   * Ingredient label as HTML. In an in-world spreading step the crop-type word
+   * ("tendrilly") is a button that opens a browsable list of that type's crops.
+   */
+  function labelHtml(x, from) {
+    if (!x.labelSegments) return esc(x.label);
+    return x.labelSegments
+      .map((seg) =>
+        seg.pool
+          ? `<button type="button" class="type-link" data-pool="${esc(seg.pool)}" data-exclude="${esc(from || "")}" ` +
+            `title="Show every ${esc(seg.text)} crop">${esc(seg.text)}</button>`
+          : esc(seg.text)
+      )
+      .join("");
+  }
+
+  // ------------------------------------------------------- crop-type modal
+
+  let typeModalOpener = null;
+
+  /** List every crop of one spreading pool; `exclude` is the crop being crossed. */
+  function openTypeModal(poolName, exclude) {
+    const type = window.BreedingEngine.cropsOfType(graph, poolName);
+    if (!type) {
+      setStatus(`“${poolName}” is not a known crop type.`, true);
+      return;
+    }
+    const pretty = type.label.replace(/_/g, " ");
+    els.typeTitle.textContent = pretty.charAt(0).toUpperCase() + pretty.slice(1) + " crops";
+    els.typeSub.textContent =
+      `${type.members.length} crops of type “${type.lang || type.label}” spread with each other in-world` +
+      (exclude ? ` — ${exclude} pairs with any of them but itself.` : ".");
+    els.typeList.innerHTML =
+      type.members
+        .map((m) => {
+          const skipped = !!exclude && m.crop === exclude;
+          const chip = m.plantVia.length
+            ? `<span class="badge plantable" title="plantable directly from an item — no breeding">🌱 ${esc(viaText(m.plantVia))}</span>`
+            : "";
+          const note = skipped ? `<span class="ct-note">the crop you are crossing</span>` : "";
+          return `<li${skipped ? ' class="ct-skip"' : ""}><span class="ct-name">${esc(m.crop)}</span>${chip}${note}</li>`;
+        })
+        .join("") || `<li class="empty">No crops recorded for this type.</li>`;
+
+    typeModalOpener = document.activeElement;
+    els.typeModal.hidden = false;
+    document.body.classList.add("modal-open");
+    els.typeClose.focus();
+  }
+
+  function closeTypeModal() {
+    if (els.typeModal.hidden) return;
+    els.typeModal.hidden = true;
+    document.body.classList.remove("modal-open");
+    if (typeModalOpener && document.contains(typeModalOpener)) typeModalOpener.focus();
+    typeModalOpener = null;
   }
 
   // --------------------------------------------------------------------- wire
@@ -213,6 +277,40 @@
   els.swap.addEventListener("click", () => {
     [els.from.value, els.to.value] = [els.to.value, els.from.value];
     if (resolveCrop(els.from.value) && resolveCrop(els.to.value)) runSearch();
+  });
+
+  // crop-type links live inside re-rendered results, so listen once on the document
+  document.addEventListener("click", (e) => {
+    const target = e.target;
+    if (!target || !target.closest) return;
+    const link = target.closest(".type-link[data-pool]");
+    if (link) {
+      e.preventDefault();
+      openTypeModal(link.dataset.pool, link.dataset.exclude || null);
+      return;
+    }
+    // click anywhere on the dimmed backdrop (but not inside the dialog) dismisses
+    if (!els.typeModal.hidden && (target === els.typeModal || target.closest("#cropTypeClose"))) closeTypeModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") return closeTypeModal();
+    if (e.key !== "Tab" || els.typeModal.hidden) return;
+    // keep Tab inside the dialog: the ✕ button and the scrollable crop list
+    const controls = [...els.typeModal.querySelectorAll("button, [href], [tabindex]:not([tabindex='-1'])")];
+    if (!controls.length) return;
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    const active = document.activeElement;
+    if (!els.typeModal.contains(active)) {
+      e.preventDefault();
+      first.focus();
+    } else if (e.shiftKey && active === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
   });
 
   boot();

@@ -127,6 +127,27 @@ async function main() {
   assert(plantableIng.length === p1.plantableExtras, "step-level plantable count must match path-level");
   assert(plantableIng.every((i) => graph.plantable.has(i.label)), "ingredient flagged plantable must exist in alternate_seeds");
 
+  console.log("\n[10] crop types — the list behind an in-world spreading suggestion");
+  const tend = engine.cropsOfType(graph, "TENDRILLY");
+  assert(tend && tend.label === "tendrilly", `label lowercased: ${tend && tend.label}`);
+  assert(tend.lang === "tendrilly", `lang carried through: ${tend && tend.lang}`);
+  assert(tend.members.length === 19, `TENDRILLY has 19 crops, got ${tend.members.length}`);
+  assert(tend.members.every((m, i, a) => i === 0 || a[i - 1].crop <= m.crop), "members alphabetical");
+  assert(tend.members.every((m) => graph.crops.includes(m.crop)), "every type member is a known crop");
+  assert(tend.members.every((m) => Array.isArray(m.plantVia)), "type members carry plantVia");
+  assert(tend.members.some((m) => m.plantVia.length > 0), "some type members are plantable");
+  assert(engine.cropsOfType(graph, "NO_SUCH_POOL") === null, "unknown type must return null");
+  console.log(`  tendrilly: ${tend.members.slice(0, 4).map((m) => m.crop).join(", ")} … (${tend.members.length} crops)`);
+
+  const poolRes = engine.findPaths(graph, "Poppy", "Rubyne", { usePools: true });
+  const poolStep = poolRes.paths[0].steps[0];
+  assert(poolStep.kind === "pool" && poolStep.pool === "RED", `pool step names its type: ${poolStep.pool}`);
+  const segs = poolStep.ingredients[0].labelSegments || [];
+  assert(segs.filter((s) => s.pool).map((s) => s.pool).join() === "RED", "exactly one clickable type segment");
+  assert(segs.map((s) => s.text).join("") === poolStep.ingredients[0].label, "segments reconstruct the plain label");
+  assert(engine.cropsOfType(graph, segs.find((s) => s.pool).pool).members.length === 19, "red type has 19 crops");
+  console.log(`  ${poolStep.ingredients[0].label} → ${segs.length} segments, type ${poolStep.pool}`);
+
   console.log(failures === 0 ? "\nALL TESTS PASSED" : `\n${failures} FAILURES`);
   process.exit(failures === 0 ? 0 : 1);
 }

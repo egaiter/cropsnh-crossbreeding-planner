@@ -29,6 +29,13 @@ fewer ingredients still need breeding**, and each path header summarizes the rat
 (e.g. "3/6 ingredients plantable"). Data comes from the `alternate_seeds` table,
 parsed from every `CropCard` constructor's `addAlternateSeed(...)` calls.
 
+An in-world spreading suggestion names the crop **type** it spreads with — "any other
+`tendrilly` crop", underlined as a link. Click the type name to open a modal listing
+every crop of that type, alphabetically, each with its 🌱 plantable item when it has
+one. The crop being crossed is listed but greyed out — a pool partner must be a
+different crop. The modal dismisses with the ✕ button, by clicking the dimmed area
+outside it, or with `Esc`.
+
 ## Files
 
 | File | Role |
@@ -39,6 +46,7 @@ parsed from every `CropCard` constructor's `addAlternateSeed(...)` calls.
 | `data.js` | **generated**: base64 of `cropsnh_breeding.db` + `vendor/sql-wasm.wasm` |
 | `vendor/sql-wasm.js` / `.wasm` | vendored sql.js 1.13.0 |
 | `test/engine.test.js` | Node harness exercising the browser's own files against the embedded DB |
+| `test/smoke-jsdom.js` | drives the real page under jsdom, including the crop-type modal |
 
 ## Path semantics
 
@@ -49,6 +57,19 @@ bred (fewer is better — 🌱 plantable items are free), then fewer extra ingre
 deterministic crosses over pool spreading, non-machine-only, lower id. Pool spreading
 (two distinct crops sharing a pool → any other pool member) is on by default; untick
 "include probabilistic in-world pool spreading" to exclude those edges.
+
+## Tests
+
+```sh
+node web/test/engine.test.js                              # engine + embedded data, zero dependencies
+
+npm i --prefix ../.tmp-run/jsdom-env jsdom@26             # jsdom stays outside the project (v31 dropped ResourceLoader)
+NODE_PATH=../.tmp-run/jsdom-env/node_modules node web/test/smoke-jsdom.js
+```
+
+The jsdom harness boots the real `index.html` against the embedded database and drives
+it: form search, path rendering/expansion, plantable badges, the pools toggle, and the
+crop-type modal (open, ✕, outside click, `Esc`).
 
 ## Regenerating after database changes
 

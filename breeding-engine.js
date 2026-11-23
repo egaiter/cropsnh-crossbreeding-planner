@@ -10,7 +10,10 @@
  * that must THEMSELVES be bred (fewer is better — crops plantable straight from
  * an item are free), then fewer extra ingredients, then deterministic crosses
  * over probabilistic pool spreading, then non machine-only, then lower id.
- * Steps carry plantability info from the `alternate_seeds` table.
+ * Steps carry plantability info from the `alternate_seeds` table. An in-world
+ * spreading step also names its crop type (`pool`, plus `labelSegments` whose
+ * `pool` segment is the type name) so the UI can list every crop of that type
+ * with `cropsOfType`.
  */
 (function (global) {
   "use strict";
@@ -78,6 +81,28 @@
       _fwdCache: {},
     };
     return graph;
+  }
+
+  // ---------------------------------------------------------------- crop types
+
+  /**
+   * Every crop that belongs to one spreading pool ("crop type", e.g. TENDRILLY
+   * -> "tendrilly"), for the in-world spreading suggestions in the UI.
+   * Returns null for an unknown pool. Members are alphabetical and carry the
+   * same plantability info as steps do.
+   */
+  function cropsOfType(graph, poolName) {
+    const pool = graph.pools.find((p) => p.name === poolName);
+    if (!pool) return null;
+    return {
+      name: pool.name,
+      label: pool.name.toLowerCase(),
+      lang: pool.lang,
+      members: pool.members
+        .slice()
+        .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+        .map((crop) => ({ crop, plantVia: (graph.plantable && graph.plantable.get(crop)) || [] })),
+    };
   }
 
   // ------------------------------------------------------------ forward edges
@@ -271,14 +296,23 @@
     const viaOf = (crop) => (graph && graph.plantable && graph.plantable.get(crop)) || [];
     if (e.kind === "pool") {
       const partnerVia = e.partnerExample ? viaOf(e.partnerExample) : [];
+      const typeLabel = e.pool.toLowerCase();
       return {
         from: e.from,
         to: e.to,
         kind: "pool",
-        text: `Let ${e.from} spread with any other ${e.pool.toLowerCase()} crop in-world`,
+        pool: e.pool,
+        text: `Let ${e.from} spread with any other ${typeLabel} crop in-world`,
         ingredients: [
           {
-            label: `any other ${e.pool.toLowerCase()} crop (not ${e.from})`,
+            label: `any other ${typeLabel} crop (not ${e.from})`,
+            // segments the UI renders in order; the one carrying `pool` is the
+            // crop-type name, which the UI turns into a link to that type's crops
+            labelSegments: [
+              { text: "any other " },
+              { text: typeLabel, pool: e.pool },
+              { text: ` crop (not ${e.from})` },
+            ],
             note: "probabilistic pool spreading",
             plantable: !!e.partnerExample,
             plantVia: partnerVia,
@@ -326,7 +360,7 @@
     return Math.abs(h);
   }
 
-  const BreedingEngine = { loadGraph, findPaths, bfsDistances, parseRequirements };
+  const BreedingEngine = { loadGraph, findPaths, bfsDistances, parseRequirements, cropsOfType };
 
   if (typeof module !== "undefined" && module.exports) module.exports = BreedingEngine;
   else global.BreedingEngine = BreedingEngine;

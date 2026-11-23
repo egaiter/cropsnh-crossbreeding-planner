@@ -88,6 +88,45 @@
   .need { margin-top: 3px; color: var(--muted); font-size: 13px; }
   .need b { color: var(--text); font-weight: 600; }
   .legend { margin-top: 12px; color: var(--muted); font-size: 12.5px; }
+  /* a crop type named in an in-world spreading suggestion — opens the type browser */
+  .type-link {
+    background: none; border: 0; padding: 0; margin: 0; font: inherit; font-weight: 600;
+    color: #7fb2d6; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px;
+  }
+  .type-link:hover, .type-link:focus-visible { color: var(--green); text-decoration: underline; }
+  .legend .type-link { cursor: default; pointer-events: none; } /* legend shows the look, not a real link */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 40; padding: 24px 16px;
+    background: rgba(5, 9, 4, .68); display: flex; align-items: center; justify-content: center;
+  }
+  .modal-overlay[hidden] { display: none; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    width: min(520px, 100%); max-height: min(72vh, 620px);
+    display: flex; flex-direction: column; box-shadow: 0 20px 48px rgba(0, 0, 0, .55);
+  }
+  .modal-head { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .modal-head h2 { margin: 0; font-size: 17px; color: var(--green); }
+  .modal-sub { margin: 3px 0 0; color: var(--muted); font-size: 12.5px; }
+  .modal-close {
+    margin-left: auto; flex: 0 0 auto; width: 30px; height: 30px; padding: 0;
+    background: var(--bg); color: var(--muted); border: 1px solid var(--line); border-radius: 8px;
+    font-size: 15px; line-height: 1; cursor: pointer;
+  }
+  .modal-close:hover { color: var(--red); border-color: var(--red); }
+  .modal-close:focus-visible { outline: 2px solid var(--green-dark); outline-offset: 1px; }
+  .crop-types { list-style: none; margin: 0; padding: 8px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+  .crop-types:focus-visible { outline: 2px solid var(--green-dark); outline-offset: -2px; }
+  .crop-types li {
+    display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+    padding: 6px 9px; border-radius: 6px; font-size: 14px;
+  }
+  .crop-types li:nth-child(odd) { background: var(--panel2); }
+  .crop-types .ct-name { font-weight: 600; }
+  .crop-types .ct-skip .ct-name { color: var(--muted); font-weight: 500; }
+  .crop-types .ct-note { color: var(--muted); font-size: 11.5px; }
+  .crop-types .empty { color: var(--muted); }
+  body.modal-open { overflow: hidden; }
   footer { max-width: 880px; margin: 26px auto 0; color: var(--muted); font-size: 12px; }
   footer code { background: var(--panel); padding: 1px 5px; border-radius: 4px; }
   #boot.booting .panel.results { display: none; }
@@ -119,7 +158,8 @@
       </div>
       <div class="legend">
         <span class="badge plantable">🌱 item</span> marks crops plantable directly from that item with no breeding;
-        tied-shortest paths are prioritized so fewer ingredients still need breeding.
+        tied-shortest paths are prioritized so fewer ingredients still need breeding. Click a
+        <span class="type-link">crop type</span> in an in-world spreading step to see every crop of that type.
       </div>
     </form>
   </div>
@@ -128,6 +168,19 @@
   <div id="results" class="results"></div>
 </main>
 <footer id="footer">loading database…</footer>
+
+<div class="modal-overlay" id="cropTypeModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cropTypeTitle">
+    <div class="modal-head">
+      <div>
+        <h2 id="cropTypeTitle">crop type</h2>
+        <p class="modal-sub" id="cropTypeSub"></p>
+      </div>
+      <button type="button" class="modal-close" id="cropTypeClose" title="Close" aria-label="Close crop type list">✕</button>
+    </div>
+    <ul class="crop-types" id="cropTypeList" tabindex="0" aria-label="Crops of this type"></ul>
+  </div>
+</div>
 
 <script src="data.js"></script>
 <script src="vendor/sql-wasm.js"></script>
